@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>연금 세액공제 계산기</title>
+  <style>
+    body{font-family:'Noto Sans KR',sans-serif;background:#f7f8fb;margin:0;padding:24px;color:#333}
+    .container{max-width:700px;margin:0 auto}
+    .card{background:#fff;padding:24px;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,0.08)}
+    h2{margin-top:0;color:#2b6cb0;font-size:1.4rem}
+    label{display:block;margin-top:16px;font-weight:600;font-size:.95rem}
+    input,select{width:100%;padding:12px 10px;margin-top:6px;border-radius:8px;border:1px solid #d0d7e2;font-size:.95rem}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    button{margin-top:20px;padding:12px 16px;width:100%;border-radius:10px;border:0;background:#2b6cb0;color:#fff;font-weight:700;font-size:1rem;cursor:pointer}
+    button:hover{background:#245b96}
+    .result{margin-top:20px;padding:20px;border-radius:12px;background:#f0f5ff;border:1px solid #d6e2ff}
+    .result h3{margin-top:0;color:#1a365d;font-size:1.1rem}
+    .result p{margin:6px 0;font-size:.95rem}
+    .highlight{font-weight:700;color:#2b6cb0}
+    small{color:#666;font-size:.8rem;display:block;margin-top:12px;line-height:1.4}
+    footer{margin-top:24px;font-size:.75rem;color:#777;text-align:center}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h2>연금 세액공제 계산기</h2>
+
+      <label>계산 방식</label>
+      <select id="mode">
+        <option value="annual">연간 납입액</option>
+        <option value="monthly">월 납입액</option>
+      </select>
+
+      <div class="row">
+        <div>
+          <label>연금저축 (원)</label>
+          <input type="text" id="pension" placeholder="예: 6,000,000" value="6,000,000" />
+        </div>
+        <div>
+          <label>IRP (원)</label>
+          <input type="text" id="irp" placeholder="예: 300,000" value="0" />
+        </div>
+      </div>
+
+      <div id="monthlyInputs" style="display:none">
+        <label>월 납입액 (원)</label>
+        <input type="text" id="monthlyVal" placeholder="예: 50,000" />
+      </div>
+
+      <label>총급여 또는 종합소득 (원)</label>
+      <input type="text" id="income" placeholder="예: 50,000,000" value="50,000,000" />
+
+      <label>소득 구분</label>
+      <select id="incomeType">
+        <option value="gross">총급여</option>
+        <option value="comprehensive">종합소득</option>
+      </select>
+
+      <button id="calc">계산하기</button>
+
+      <div class="result" id="out" style="display:none">
+        <h3>계산 결과</h3>
+        <div id="breakdown"></div>
+        <small>
+          본 계산기는 참고용으로만 제공되며, 실제 세액공제 금액은 국세청 규정 및 개인 상황에 따라 달라질 수 있습니다.
+        </small>
+      </div>
+      <footer>© @DAILYDAILY</footer>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const mode = document.getElementById('mode');
+  const monthlyInputs = document.getElementById('monthlyInputs');
+  const calcBtn = document.getElementById('calc');
+  const out = document.getElementById('out');
+
+  function formatKRW(x){
+    return x.toLocaleString('ko-KR') + '원';
+  }
+
+  function parseNumber(str){
+    return Number(str.replace(/,/g,'')) || 0;
+  }
+
+  function addCommaInput(id){
+    const el = document.getElementById(id);
+    el.addEventListener('input', ()=>{
+      const val = el.value.replace(/,/g,'');
+      if(!isNaN(val) && val!==''){
+        el.value = Number(val).toLocaleString('ko-KR');
+      } else {
+        el.value = '';
+      }
+    });
+  }
+
+  ['pension','irp','monthlyVal','income'].forEach(addCommaInput);
+
+  mode.addEventListener('change', ()=>{
+    monthlyInputs.style.display = mode.value === 'monthly' ? 'block' : 'none';
+  });
+
+  calcBtn.addEventListener('click', ()=>{
+    let pension = parseNumber(document.getElementById('pension').value);
+    let irp = parseNumber(document.getElementById('irp').value);
+    const income = parseNumber(document.getElementById('income').value);
+    const incomeType = document.getElementById('incomeType').value;
+
+    if(mode.value === 'monthly'){
+      const m = parseNumber(document.getElementById('monthlyVal').value);
+      pension = m * 12;
+      irp = 0;
+    }
+
+    const pensionCap = 6000000;
+    const combinedCap = 9000000;
+    const threshold = (incomeType === 'gross') ? 55000000 : 45000000;
+    const rate = income <= threshold ? 0.165 : 0.132;
+
+    const pensionEligible = Math.min(pension, pensionCap);
+    const totalEligible = Math.min(pension + irp, combinedCap);
+    const irpEligible = Math.max(0, totalEligible - pensionEligible);
+
+    const totalCredit = Math.round((pensionEligible + irpEligible) * rate);
+
+    const breakdown = `
+      <p>연금저축 납입액: <span class="highlight">${formatKRW(pension)}</span></p>
+      <p>IRP 납입액: <span class="highlight">${formatKRW(irp)}</span></p>
+      <p>총 소득: <span class="highlight">${formatKRW(income)}</span> (${incomeType==='gross'?'총급여':'종합소득'})</p>
+      <hr>
+      <p>공제 대상 합계: <span class="highlight">${formatKRW(pensionEligible + irpEligible)}</span></p>
+      <p>적용 공제율: <span class="highlight">${(rate*100).toFixed(1)}%</span></p>
+      <hr>
+      <p style="font-size:1.1rem">총 세액공제액: <span class="highlight">${formatKRW(totalCredit)}</span></p>
+    `;
+
+    document.getElementById('breakdown').innerHTML = breakdown;
+    out.style.display = 'block';
+  });
+})();
+</script>
+</body>
+</html>
